@@ -11,12 +11,12 @@ library FDLib;
   using PChar or ShortString parameters. }
 
 uses
-  System.SysUtils,
+  System.SysUtils,  dateUtils,
   System.Classes,FireDAC.Comp.Client,Data.DB,
   Firedac.Stan.Def, FireDAC.Phys.MSAccDef, FireDAC.Stan.Intf, FireDAC.Phys,
   FireDAC.Phys.ODBCBase, FireDAC.Phys.MSAcc, FireDAC.Phys.FBDef,
   FireDAC.Phys.IBBase, FireDAC.Phys.FB,FireDAC.DApt, FireDAC.UI.Intf,
-  FireDAC.VCLUI.Wait, FireDAC.Comp.UI,firedac.stan.async,system.json;
+  FireDAC.VCLUI.Wait, FireDAC.Comp.UI,firedac.stan.async,system.json,RegularExpressions;
 
 {$R *.res}
 
@@ -25,7 +25,7 @@ type
   function AsJSON : string;
 end;
 
-procedure setConfig(AConfig : PAnsiChar ;AConn : TFdConnection);
+procedure setConfig(var AConfig : PAnsiChar ;var AConn : TFdConnection);
 var
  LObj : TJSONObject;
 begin
@@ -39,6 +39,41 @@ begin
     LObj.Free;
   end;
 
+end;
+
+
+function update(AConfig ,ACmd : PAnsichar ) : PAnsiChar ;cdecl;
+var
+  LQuery : TFDQuery;
+  LCOnn  : TFdConnection;
+begin
+ try
+  LConn := TFdConnection.Create(nil);
+  LConn.ConnectionName := IntToStr(LConn.GetHashCode());
+  LConn.LoginPrompt := False;
+  setConfig(AConfig,LConn);
+  LConn.Connected := True;
+  Lquery := TFDQuery.Create(nil);
+  Lquery.Connection := LConn;
+  try
+   LQuery.SQL.Text := ACmd;
+   LQuery.ExecSQL;
+
+   result := PAnsiChar( AnsiString(
+     Format('{"ok" : true,"rows_affected" : %d}',[ LQuery.RowsAffected ])
+
+   ) );
+  finally
+    LQuery.Close;
+    FreeAndNil(LQuery);
+    LConn.Connected := False;
+    FreeAndNil(LConn);
+  end;
+ except on e : Exception do
+  begin
+       result := PAnsiChar( AnsiString( Format('{"ok":false,"error":"%s","rows_affected" :0}',[e.Message])) );
+  end;
+ end;
 end;
 
 function query(AConfig ,ACmd : PAnsichar ) : PAnsiChar ;cdecl;
@@ -71,70 +106,59 @@ begin
  end;
 end;
 
-exports
-  query;
+
 
 function TFDQueryHelper.AsJSON: string;
 var
  book : TBookMark;
- i,j,len : integer;
- row : string;
- function comma(index,size : integer) : string;
- begin
-   if index = (size-1) then
-      Result := ''
-   else
-      Result := ',';
- end;
- function fmtField(f : TField) : string;
- begin
-   case f.DataType of
-     ftInteger,
-     ftFloat :
-       Result := f.AsString.Replace(',','.');
-     ftDate,ftDateTime,ftTimeStamp,ftTime :
-       Result := Format('"%s"',[ FormatDateTime('dd/MM/yyyy',f.AsDateTime)]);
-     else
-       Result := Format('"%s"',[f.AsString]);
-   end;
-   if Result.IsEmpty then
-      Result := 'null';
-
- end;
+ i,j : integer;
+ LObj : TJSONObject;
+ LArr : TJSONArray;
+ LPair : TJSONPair;
+ f : TField;
+ LKey : string ;
 begin
-  len :=  self.RecordCount;
   book := self.Bookmark;
   self.DisableControls;
-  row := '';
-  Result := Format('{"rows" : %d,"result" : [',[len]);
+  LArr := TJSONArray.Create;
   try
    First;
    i := 0;
    while not Eof do
    begin
      j := 0;
-     row := '{';
+     LObj := TJSONObject.Create;
      while j < Fields.Count  do
      begin
-       row := row + '"'+LowerCase(Fields[j].FieldName)+'":'+fmtField(Fields[j])+comma(j,Fields.Count);
+       f := Fields[j];
+       LKey := LowerCase(f.FieldName);
+       case f.DataType of
+       ftInteger,
+       ftFloat :
+
+         LPair := TJSONPair.Create(LKey,TJSONNumber.Create(f.AsFloat)  ));
+       ftDate,ftDateTime,ftTimeStamp,ftTime :
+          LPair := TJSONPair.Create(LKey,FormatDateTime('yyyy-mm-dd hh:mm:ss',f.AsDateTime));
+       else
+          LPair := TJSONPair.Create(LKey,TRegEx.Replace(f.AsString,'["{}]+','',[roIgnoreCase]));
+       end;
+       LObj.AddPair(LPair);
        Inc(j);
      end;
-     row := row + '},';
-     Result := Result + row;
+     LArr.AddElement(LObj);
      Inc(i);
      Next;
    end;
-   Result := Trim(Result);
-   if (Result.EndsWith(',')) then
-   begin
-     Result := Copy(Result,0,Result.Length-1);
-   end;
-   Result := Result + ']}';
+   Result := LArr.ToString;
   finally
    Bookmark := book;
    EnableControls;
+   LArr.Free;
   end;
 end;
+
+exports
+  query,update;
 
 begin
 end.

@@ -16,7 +16,7 @@ uses
   Firedac.Stan.Def, FireDAC.Phys.MSAccDef, FireDAC.Stan.Intf, FireDAC.Phys,
   FireDAC.Phys.ODBCBase, FireDAC.Phys.MSAcc, FireDAC.Phys.FBDef,
   FireDAC.Phys.IBBase, FireDAC.Phys.FB,FireDAC.DApt, FireDAC.UI.Intf,
-  FireDAC.VCLUI.Wait, FireDAC.Comp.UI,firedac.stan.async,system.json;
+  FireDAC.VCLUI.Wait, FireDAC.Comp.UI,firedac.stan.async,system.json,RegularExpressions;
 
 {$R *.res}
 
@@ -132,24 +132,15 @@ begin
      begin
        f := Fields[j];
        LKey := LowerCase(f.FieldName);
-       if f.IsNull then
-       begin
-          LPair := TJSONPair.Create(LKey,TJSONNull.Create);
-       end
-       else if f.IsBlob then
-       begin
-         LPair := TJSONPair.Create(LKey,f.AsString);
-       end else
-       begin
-         case f.DataType of
-           ftInteger,
-           ftFloat :
-             LPair := TJSONPair.Create(LKey,TJSONNumber.Create(f.AsFloat));
-           ftDate,ftDateTime,ftTimeStamp,ftTime :
-              LPair := TJSONPair.Create(LKey,FormatDateTime('yyyy-mm-dd hh:mm:ss',f.AsDateTime));
-           else
-              LPair := TJSONPair.Create(LKey,f.AsString);
-         end;
+       case f.DataType of
+       ftInteger,
+       ftFloat :
+
+         LPair := TJSONPair.Create(LKey,TJSONNumber.Create(f.AsFloat));
+       ftDate,ftDateTime,ftTimeStamp,ftTime :
+          LPair := TJSONPair.Create(LKey,FormatDateTime('yyyy-mm-dd hh:mm:ss',f.AsDateTime));
+       else
+          LPair := TJSONPair.Create(LKey,TRegEx.Replace(f.AsString,'["{}]+','',[roIgnoreCase]));
        end;
        LObj.AddPair(LPair);
        Inc(j);

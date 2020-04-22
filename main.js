@@ -13,8 +13,9 @@ var sett = {
     password : "masterkey"
 }
 
-console.log( fdlib.update(JSON.stringify(sett),"update filial set nome = 'IVO TESTE 2' where codigo = '1'")) // 2
+//console.log( fdlib.update(JSON.stringify(sett),"update filial set nome = 'IVO TESTE conceição' where codigo = '1'")) // 2
  
-
-console.log( fdlib.query(JSON.stringify(sett),"select codigo,nome from filial where codigo = '1'")) // 2
+let ret = fdlib.query(JSON.stringify(sett),"select codigo,nome,precovenda,obs from ctprod order by codigo asc")
+//ret = JSON.parse(ret)
+console.log( ret ) // 2
  

@@ -132,24 +132,14 @@ begin
      begin
        f := Fields[j];
        LKey := LowerCase(f.FieldName);
-       if f.IsNull then
-       begin
-          LPair := TJSONPair.Create(LKey,TJSONNull.Create);
-       end
-       else if f.IsBlob then
-       begin
-         LPair := TJSONPair.Create(LKey,f.AsString);
-       end else
-       begin
-         case f.DataType of
-           ftInteger,
-           ftFloat :
-             LPair := TJSONPair.Create(LKey,TJSONNumber.Create(f.AsFloat));
-           ftDate,ftDateTime,ftTimeStamp,ftTime :
-              LPair := TJSONPair.Create(LKey,FormatDateTime('yyyy-mm-dd hh:mm:ss',f.AsDateTime));
-           else
-              LPair := TJSONPair.Create(LKey,f.AsString);
-         end;
+       case f.DataType of
+       ftInteger,
+       ftFloat :
+         LPair := TJSONPair.Create(LKey,TJSONNumber.Create(f.AsFloat));
+       ftDate,ftDateTime,ftTimeStamp,ftTime :
+          LPair := TJSONPair.Create(LKey,FormatDateTime('yyyy-mm-dd hh:mm:ss',f.AsDateTime));
+       else
+          LPair := TJSONPair.Create(LKey,f.AsString);
        end;
        LObj.AddPair(LPair);
        Inc(j);
