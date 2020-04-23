@@ -11,7 +11,7 @@ library FDLib;
   using PChar or ShortString parameters. }
 
 uses
-  System.SysUtils,  dateUtils,
+  System.SysUtils,  dateUtils,windows,
   System.Classes,FireDAC.Comp.Client,Data.DB,
   Firedac.Stan.Def, FireDAC.Phys.MSAccDef, FireDAC.Stan.Intf, FireDAC.Phys,
   FireDAC.Phys.ODBCBase, FireDAC.Phys.MSAcc, FireDAC.Phys.FBDef,
@@ -19,6 +19,8 @@ uses
   FireDAC.VCLUI.Wait, FireDAC.Comp.UI,firedac.stan.async,system.json;
 
 {$R *.res}
+
+{$SetPEFlags IMAGE_FILE_LARGE_ADDRESS_AWARE}
 
 type
   TFDQueryHelper = class helper for TFDquery
@@ -80,6 +82,8 @@ function query(AConfig ,ACmd : PAnsichar ) : PAnsiChar ;cdecl;
 var
   LQuery : TFDQuery;
   LCOnn  : TFdConnection;
+  LJson : AnsiString;
+  LLen : Cardinal;
 begin
  try
   LConn := TFdConnection.Create(nil);
@@ -92,7 +96,10 @@ begin
   try
    LQuery.SQL.Text := ACmd;
    LQuery.Active := true;
-   result := PAnsiChar( AnsiString(LQuery.AsJson) );
+   LJson := LQuery.AsJSON;
+   LLen := Length(LJson) * SizeOf(AnsiChar);
+   GetMem(result, LLen);  //necessário criar função para liberar a memoria
+   Move(Ljson[1], result^, LLen );
   finally
     LQuery.Close;
     FreeAndNil(LQuery);
@@ -110,20 +117,16 @@ end;
 
 function TFDQueryHelper.AsJSON: string;
 var
- book : TBookMark;
- i,j : integer;
+ j : integer;
  LObj : TJSONObject;
  LArr : TJSONArray;
  LPair : TJSONPair;
  f : TField;
  LKey : string ;
 begin
-  book := self.Bookmark;
-  self.DisableControls;
   LArr := TJSONArray.Create;
   try
    First;
-   i := 0;
    while not Eof do
    begin
      j := 0;
@@ -155,13 +158,10 @@ begin
        Inc(j);
      end;
      LArr.AddElement(LObj);
-     Inc(i);
      Next;
    end;
    Result := LArr.ToString;
   finally
-   Bookmark := book;
-   EnableControls;
    LArr.Free;
   end;
 end;
@@ -170,4 +170,6 @@ exports
   query,update;
 
 begin
+
+  FFDGUIxSilentMode := True;
 end.
