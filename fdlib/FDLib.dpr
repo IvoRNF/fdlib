@@ -16,7 +16,7 @@ uses
   Firedac.Stan.Def, FireDAC.Phys.MSAccDef, FireDAC.Stan.Intf, FireDAC.Phys,
   FireDAC.Phys.ODBCBase, FireDAC.Phys.MSAcc, FireDAC.Phys.FBDef,
   FireDAC.Phys.IBBase, FireDAC.Phys.FB,FireDAC.DApt, FireDAC.UI.Intf,
-  FireDAC.VCLUI.Wait, FireDAC.Comp.UI,firedac.stan.async,system.json;
+  FireDAC.VCLUI.Wait, FireDAC.Comp.UI,firedac.stan.async,system.json,system.Generics.Collections;
 
 {$R *.res}
 
@@ -24,8 +24,13 @@ uses
 
 type
   TFDQueryHelper = class helper for TFDquery
-  function AsJSON : string;
+  function AsJSON(AGuid : string) : string;
 end;
+
+var    //vai ser liberado pelo windows quando dll morrer só
+  FLock : TObject;
+  FPointers : TDIctionary<string,pointer>;
+
 
 procedure setConfig(var AConfig : PAnsiChar ;var AConn : TFdConnection);
 var
@@ -43,7 +48,20 @@ begin
 
 end;
 
-
+function release(AGuid : PAnsiChar): PAnsiChar ; cdecl;
+var
+  LPointer : Pointer;
+begin
+   if FPointers.ContainsKey(AGuid) then
+   begin
+      LPointer := FPointers[AGuid];
+      FreeMem(LPointer);
+      result := PAnsiChar( AnsiString('{"ok" : true}') );
+   end else
+   begin
+     result := PAnsiChar( AnsiString('{"ok" : false}') );
+   end;
+end;
 function update(AConfig ,ACmd : PAnsichar ) : PAnsiChar ;cdecl;
 var
   LQuery : TFDQuery;
@@ -78,16 +96,21 @@ begin
  end;
 end;
 
+
 function query(AConfig ,ACmd : PAnsichar ) : PAnsiChar ;cdecl;
 var
   LQuery : TFDQuery;
   LCOnn  : TFdConnection;
   LJson : AnsiString;
   LLen : Cardinal;
+  LGuid: TGUID;
+  LGuidStr : string ;
 begin
  try
   LConn := TFdConnection.Create(nil);
   LConn.ConnectionName := IntToStr(LConn.GetHashCode());
+  CreateGUID(LGuid);
+  LGuidStr := GUIDToString(LGuid);
   LConn.LoginPrompt := False;
   setConfig(AConfig,LConn);
   LConn.Connected := True;
@@ -96,10 +119,11 @@ begin
   try
    LQuery.SQL.Text := ACmd;
    LQuery.Active := true;
-   LJson := LQuery.AsJSON;
+   LJson := LQuery.AsJSON(LGuidStr);
    LLen := Length(LJson) * SizeOf(AnsiChar);
    GetMem(result, LLen);  //necessário criar função para liberar a memoria
    Move(Ljson[1], result^, LLen );
+   FPointers.add(LGuidStr,result);
   finally
     LQuery.Close;
     FreeAndNil(LQuery);
@@ -115,16 +139,17 @@ end;
 
 
 
-function TFDQueryHelper.AsJSON: string;
+function TFDQueryHelper.AsJSON(AGuid : string): string;
 var
  j : integer;
- LObj : TJSONObject;
+ LObj,LMainObj : TJSONObject;
  LArr : TJSONArray;
  LPair : TJSONPair;
  f : TField;
  LKey : string ;
 begin
   LArr := TJSONArray.Create;
+  LMainObj := TJSONObject.Create;
   try
    First;
    while not Eof do
@@ -160,16 +185,20 @@ begin
      LArr.AddElement(LObj);
      Next;
    end;
-   Result := LArr.ToString;
+   LMainObj.AddPair('handle',AGuid);
+   LMainObj.AddPair(TJSONPair.Create('rows',LArr));
+   Result := LMainObj.ToString;
   finally
-   LArr.Free;
+   LMainObj.Free;
   end;
 end;
 
 exports
   query,update;
 
-begin
 
+begin
+  FLock := TObject.Create;
+  FPointers :=  TDIctionary<string,pointer>.Create;
   FFDGUIxSilentMode := True;
 end.
