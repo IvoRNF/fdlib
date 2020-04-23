@@ -1,20 +1,14 @@
 {
-  "name": "node-dll-caller",
+  "name": "fdlib-win-x64",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "a firedac DLL for windows x64 written in delphi",
+  "main": "fdlib.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
     "ffi-napi": "^2.4.7"
-  },
-  "pkg": {
-    "node_modules": [
-      "./*.node"
-    ]
   }
 }
