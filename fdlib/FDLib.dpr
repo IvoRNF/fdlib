@@ -52,15 +52,21 @@ function release(AGuid : PAnsiChar): PAnsiChar ; cdecl;
 var
   LPointer : Pointer;
 begin
+ System.TMonitor.Enter(FLock);
+ try
    if FPointers.ContainsKey(AGuid) then
    begin
       LPointer := FPointers[AGuid];
       FreeMem(LPointer);
       result := PAnsiChar( AnsiString('{"ok" : true}') );
+      FPointers.Remove(AGuid);
    end else
    begin
      result := PAnsiChar( AnsiString('{"ok" : false}') );
    end;
+ finally
+    System.TMonitor.Exit(FLock);
+ end;
 end;
 function update(AConfig ,ACmd : PAnsichar ) : PAnsiChar ;cdecl;
 var
