@@ -200,7 +200,7 @@ begin
 end;
 
 exports
-  query,update;
+  query,update,release;
 
 
 begin

@@ -27,6 +27,11 @@ type
   function AsJSON(AGuid : string) : string;
 end;
 
+var    //vai ser liberado pelo windows quando dll morrer só
+  FLock : TObject;
+  FPointers : TDIctionary<string,pointer>;
+
+
 procedure setConfig(var AConfig : PAnsiChar ;var AConn : TFdConnection);
 var
  LObj : TJSONObject;
@@ -43,7 +48,26 @@ begin
 
 end;
 
-
+function release(AGuid : PAnsiChar): PAnsiChar ; cdecl;
+var
+  LPointer : Pointer;
+begin
+ System.TMonitor.Enter(FLock);
+ try
+   if FPointers.ContainsKey(AGuid) then
+   begin
+      LPointer := FPointers[AGuid];
+      FreeMem(LPointer);
+      result := PAnsiChar( AnsiString('{"ok" : true}') );
+      FPointers.Remove(AGuid);
+   end else
+   begin
+     result := PAnsiChar( AnsiString('{"ok" : false}') );
+   end;
+ finally
+    System.TMonitor.Exit(FLock);
+ end;
+end;
 function update(AConfig ,ACmd : PAnsichar ) : PAnsiChar ;cdecl;
 var
   LQuery : TFDQuery;
@@ -78,9 +102,6 @@ begin
  end;
 end;
 
-var    //vai ser liberado pelo windows quando dll morrer só
-  FLock : TObject;
-  FPointers : TDIctionary<string,pointer>;
 
 function query(AConfig ,ACmd : PAnsichar ) : PAnsiChar ;cdecl;
 var
@@ -94,6 +115,8 @@ begin
  try
   LConn := TFdConnection.Create(nil);
   LConn.ConnectionName := IntToStr(LConn.GetHashCode());
+  CreateGUID(LGuid);
+  LGuidStr := GUIDToString(LGuid);
   LConn.LoginPrompt := False;
   setConfig(AConfig,LConn);
   LConn.Connected := True;
@@ -102,13 +125,11 @@ begin
   try
    LQuery.SQL.Text := ACmd;
    LQuery.Active := true;
-   LJson := LQuery.AsJSON;
+   LJson := LQuery.AsJSON(LGuidStr);
    LLen := Length(LJson) * SizeOf(AnsiChar);
    GetMem(result, LLen);  //necessário criar função para liberar a memoria
    Move(Ljson[1], result^, LLen );
-   CreateGUID(LGuid);
-   GUIDToString(LGuid);
-   FPointers.add('',result);
+   FPointers.add(LGuidStr,result);
   finally
     LQuery.Close;
     FreeAndNil(LQuery);
@@ -127,13 +148,14 @@ end;
 function TFDQueryHelper.AsJSON(AGuid : string): string;
 var
  j : integer;
- LObj : TJSONObject;
+ LObj,LMainObj : TJSONObject;
  LArr : TJSONArray;
  LPair : TJSONPair;
  f : TField;
  LKey : string ;
 begin
   LArr := TJSONArray.Create;
+  LMainObj := TJSONObject.Create;
   try
    First;
    while not Eof do
@@ -169,9 +191,11 @@ begin
      LArr.AddElement(LObj);
      Next;
    end;
-   Result := LArr.ToString;
+   LMainObj.AddPair('handle',AGuid);
+   LMainObj.AddPair(TJSONPair.Create('rows',LArr));
+   Result := LMainObj.ToString;
   finally
-   LArr.Free;
+   LMainObj.Free;
   end;
 end;
 
