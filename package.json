@@ -1,6 +1,6 @@
 {
   "name": "fdlib-win-x64",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "a firedac DLL for windows x64 written in delphi",
   "main": "fdlib.js",
   "scripts": {

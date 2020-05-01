@@ -1,0 +1,4 @@
+./fdlib/Win32
+./fdlib/Win64
+./fdli/__history
+./fdlib/__recovery

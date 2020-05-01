@@ -16,7 +16,8 @@ uses
   Firedac.Stan.Def, FireDAC.Phys.MSAccDef, FireDAC.Stan.Intf, FireDAC.Phys,
   FireDAC.Phys.ODBCBase, FireDAC.Phys.MSAcc, FireDAC.Phys.FBDef,
   FireDAC.Phys.IBBase, FireDAC.Phys.FB,FireDAC.DApt, FireDAC.UI.Intf,
-  FireDAC.VCLUI.Wait, FireDAC.Comp.UI,firedac.stan.async,system.json,system.Generics.Collections;
+  FireDAC.VCLUI.Wait, FireDAC.Comp.UI,firedac.stan.async,system.json,
+  system.Generics.Collections;
 
 {$R *.res}
 
@@ -48,26 +49,34 @@ begin
 
 end;
 
+function safePointers() : TDictionary<string,pointer>;
+begin
+   System.TMonitor.Enter(FLock);
+   try
+      result := FPointers;
+   finally
+    System.TMonitor.Exit(FLock);
+   end;
+end;
+
+
 function release(AGuid : PAnsiChar): PAnsiChar ; cdecl;
 var
   LPointer : Pointer;
 begin
- System.TMonitor.Enter(FLock);
- try
-   if FPointers.ContainsKey(AGuid) then
+   if safePointers.ContainsKey(AGuid) then
    begin
-      LPointer := FPointers[AGuid];
+      LPointer := safePointers[AGuid];
       FreeMem(LPointer);
       result := PAnsiChar( AnsiString('{"ok" : true}') );
-      FPointers.Remove(AGuid);
+      safePointers.Remove(AGuid);
    end else
    begin
      result := PAnsiChar( AnsiString('{"ok" : false}') );
    end;
- finally
-    System.TMonitor.Exit(FLock);
- end;
 end;
+
+
 function update(AConfig ,ACmd : PAnsichar ) : PAnsiChar ;cdecl;
 var
   LQuery : TFDQuery;
@@ -77,11 +86,11 @@ begin
   LConn := TFdConnection.Create(nil);
   LConn.ConnectionName := IntToStr(LConn.GetHashCode());
   LConn.LoginPrompt := False;
-  setConfig(AConfig,LConn);
-  LConn.Connected := True;
   Lquery := TFDQuery.Create(nil);
   Lquery.Connection := LConn;
   try
+   setConfig(AConfig,LConn);
+   LConn.Connected := True;
    LQuery.SQL.Text := ACmd;
    LQuery.ExecSQL;
 
@@ -103,6 +112,7 @@ begin
 end;
 
 
+
 function query(AConfig ,ACmd : PAnsichar ) : PAnsiChar ;cdecl;
 var
   LQuery : TFDQuery;
@@ -118,18 +128,18 @@ begin
   CreateGUID(LGuid);
   LGuidStr := GUIDToString(LGuid);
   LConn.LoginPrompt := False;
-  setConfig(AConfig,LConn);
-  LConn.Connected := True;
   Lquery := TFDQuery.Create(nil);
   Lquery.Connection := LConn;
   try
+   setConfig(AConfig,LConn);
+   LConn.Connected := True;
    LQuery.SQL.Text := ACmd;
    LQuery.Active := true;
    LJson := LQuery.AsJSON(LGuidStr);
    LLen := Length(LJson) * SizeOf(AnsiChar);
-   GetMem(result, LLen);  //necessário criar função para liberar a memoria
+   GetMem(result, LLen);
    Move(Ljson[1], result^, LLen );
-   FPointers.add(LGuidStr,result);
+   safePointers().add(LGuidStr,result);
   finally
     LQuery.Close;
     FreeAndNil(LQuery);
